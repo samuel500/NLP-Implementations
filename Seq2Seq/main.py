@@ -1,7 +1,6 @@
 import tensorflow as tf
 
-import matplotlib.pyplot as plt
-import matplotlib.ticker as ticker
+
 from sklearn.model_selection import train_test_split
 
 import numpy as np
@@ -12,7 +11,7 @@ import time
 
 from data_utils import *
 from models import *
-
+from eval_utils import translate
 
 
 def loss_function(real, pred):
@@ -26,27 +25,28 @@ def loss_function(real, pred):
 
 
 @tf.function
-def train_step(inp, targ, enc_hidden):
+def train_step(input_batch, target, encoder_hidden):
+
     loss = 0
 
     with tf.GradientTape() as tape:
-        enc_output, enc_hidden = encoder(inp, enc_hidden)
+        encoder_output, encoder_hidden = encoder(input_batch, encoder_hidden)
 
-        dec_hidden = enc_hidden
+        decoder_hidden = encoder_hidden
 
-        dec_input = tf.expand_dims([targ_lang.word_index['<start>']] * BATCH_SIZE, 1)
+        decoder_input = tf.expand_dims([targ_lang.word_index['<start>']] * BATCH_SIZE, 1)
 
         # Teacher forcing - feeding the target as the next input
-        for t in range(1, targ.shape[1]):
-            # passing enc_output to the decoder
-            predictions, dec_hidden, _ = decoder(dec_input, dec_hidden, enc_output)
+        for t in range(1, target.shape[1]):
+            # passing encoder_output to the decoder
+            predictions, decoder_hidden, _ = decoder(decoder_input, decoder_hidden, encoder_output)
 
-            loss += loss_function(targ[:, t], predictions)
+            loss += loss_function(target[:, t], predictions)
 
             # using teacher forcing
-            dec_input = tf.expand_dims(targ[:, t], 1)
+            decoder_input = tf.expand_dims(target[:, t], 1)
 
-    batch_loss = (loss / int(targ.shape[1]))
+    batch_loss = (loss / int(target.shape[1]))
 
     variables = encoder.trainable_variables + decoder.trainable_variables
 
@@ -55,69 +55,6 @@ def train_step(inp, targ, enc_hidden):
     optimizer.apply_gradients(zip(gradients, variables))
 
     return batch_loss
-
-
-
-def evaluate(sentence):
-    attention_plot = np.zeros((max_length_targ, max_length_inp))
-
-    sentence = preprocess_sentence(sentence)
-
-    inputs = [inp_lang.word_index[i] for i in sentence.split(' ')]
-    inputs = tf.keras.preprocessing.sequence.pad_sequences([inputs], maxlen=max_length_inp, padding='post')
-    inputs = tf.convert_to_tensor(inputs)
-
-    result = ''
-
-    hidden = [tf.zeros((1, units))]
-    enc_out, enc_hidden = encoder(inputs, hidden)
-
-    dec_hidden = enc_hidden
-    dec_input = tf.expand_dims([targ_lang.word_index['<start>']], 0)
-
-    for t in range(max_length_targ):
-        predictions, dec_hidden, attention_weights = decoder(dec_input, dec_hidden, enc_out)
-
-        # storing the attention weights to plot later on
-        attention_weights = tf.reshape(attention_weights, (-1, ))
-        attention_plot[t] = attention_weights.numpy()
-
-        predicted_id = tf.argmax(predictions[0]).numpy()
-
-        result += targ_lang.index_word[predicted_id] + ' '
-
-        if targ_lang.index_word[predicted_id] == '<end>':
-            return result, sentence, attention_plot
-
-        # the predicted ID is fed back into the model
-        dec_input = tf.expand_dims([predicted_id], 0)
-
-    return result, sentence, attention_plot
-
-
-def plot_attention(attention, sentence, predicted_sentence):
-    fig = plt.figure(figsize=(10,10))
-    ax = fig.add_subplot(1, 1, 1)
-    ax.matshow(attention, cmap='viridis')
-
-    fontdict = {'fontsize': 14}
-
-    ax.set_xticklabels([''] + sentence, fontdict=fontdict, rotation=90)
-    ax.set_yticklabels([''] + predicted_sentence, fontdict=fontdict)
-
-    ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
-    ax.yaxis.set_major_locator(ticker.MultipleLocator(1))
-
-    plt.show()
-
-def translate(sentence):
-    result, sentence, attention_plot = evaluate(sentence)
-
-    print('Input: %s' % (sentence))
-    print('Predicted translation: {}'.format(result))
-
-    attention_plot = attention_plot[:len(result.split(' ')), :len(sentence.split(' '))]
-    plot_attention(attention_plot, sentence.split(' '), result.split(' '))
 
 
 
@@ -143,11 +80,11 @@ input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val = t
 print(len(input_tensor_train), len(target_tensor_train), len(input_tensor_val), len(target_tensor_val))
 
 
-print ("Input Language; index to word mapping")
-convert(inp_lang, input_tensor_train[0])
-print ()
-print ("Target Language; index to word mapping")
-convert(targ_lang, target_tensor_train[0])
+# print ("Input Language; index to word mapping")
+# convert(inp_lang, input_tensor_train[0])
+# print ()
+# print ("Target Language; index to word mapping")
+# convert(targ_lang, target_tensor_train[0])
 
 BUFFER_SIZE = len(input_tensor_train)
 BATCH_SIZE = 64
@@ -174,7 +111,7 @@ print ('Encoder Hidden state shape: (batch size, units) {}'.format(sample_hidden
 
 
 
-attention_layer = BahdanauAttention(10)
+attention_layer = AdditiveAttention(10)
 attention_result, attention_weights = attention_layer(sample_hidden, sample_output)
 
 print("Attention result shape: (batch size, units) {}".format(attention_result.shape))
@@ -204,11 +141,11 @@ EPOCHS = 10
 for epoch in range(EPOCHS):
     start = time.time()
 
-    enc_hidden = encoder.initialize_hidden_state()
+    encoder_hidden = encoder.initialize_hidden_state()
     total_loss = 0
 
-    for (batch, (inp, targ)) in enumerate(dataset.take(steps_per_epoch)):
-        batch_loss = train_step(inp, targ, enc_hidden)
+    for (batch, (input_batch, target)) in enumerate(dataset.take(steps_per_epoch)):
+        batch_loss = train_step(input_batch, target, encoder_hidden)
         total_loss += batch_loss
 
         if batch % 100 == 0:
@@ -221,16 +158,3 @@ for epoch in range(EPOCHS):
                                     total_loss / steps_per_epoch))
     print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
 
-
-
-
-checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
-
-translate(u'hace mucho frio aqui.')
-
-translate(u'esta es mi vida.')
-
-translate(u'¿todavia estan en casa?')
-
-
-translate(u'trata de averiguarlo.')

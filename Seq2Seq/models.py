@@ -1,30 +1,31 @@
 import tensorflow as tf
 
 
-from tensorflow.keras.layers import Dense, Layer, GRU, Embedding
+from tensorflow.keras.layers import Dense, Layer, GRU, Embedding, Bidirectional
 
 
 
 class Encoder(tf.keras.Model):
 
-    def __init__(self, vocab_size, embedding_dim, enc_units, batch_sz):
+    def __init__(self, vocab_size, embedding_dim, enc_units, batch_size):
         super(Encoder, self).__init__()
-        self.batch_sz = batch_sz
+        self.batch_size = batch_size
         self.enc_units = enc_units
         self.embedding = Embedding(vocab_size, embedding_dim)
-        self.gru = GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
+        self.rnn = Bidirectional(GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform'))
 
     def call(self, x, hidden):
         x = self.embedding(x)
-        output, state = self.gru(x, initial_state = hidden)
+        output, state = self.rnn(x, initial_state=hidden)
         return output, state
 
     def initialize_hidden_state(self):
-        return tf.zeros((self.batch_sz, self.enc_units))
+        return tf.zeros((self.batch_size, self.enc_units))
 
 
-class AdditiveAttention(tf.keras.layers.Layer): 
+class AdditiveAttention(Layer): 
     # https://arxiv.org/abs/1508.04025
+    # http://web.stanford.edu/class/cs224n/slides/cs224n-2019-lecture08-nmt.pdf#page=78
     def __init__(self, units):
         super(AdditiveAttention, self).__init__()
         self.W1 = Dense(units)
@@ -54,9 +55,9 @@ class AdditiveAttention(tf.keras.layers.Layer):
 
 class Decoder(tf.keras.Model):
 
-    def __init__(self, vocab_size, embedding_dim, dec_units, batch_sz):
+    def __init__(self, vocab_size, embedding_dim, dec_units, batch_size):
         super(Decoder, self).__init__()
-        self.batch_sz = batch_sz
+        self.batch_size = batch_size #? 
         self.dec_units = dec_units
         self.embedding = Embedding(vocab_size, embedding_dim)
         self.gru = GRU(self.dec_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
@@ -65,9 +66,9 @@ class Decoder(tf.keras.Model):
         self.attention = AdditiveAttention(self.dec_units)
 
 
-    def call(self, x, hidden, enc_output):
+    def call(self, x, hidden, encoder_output):
         # enc_output shape == (batch_size, max_length, hidden_size)
-        context_vector, attention_weights = self.attention(hidden, enc_output)
+        context_vector, attention_weights = self.attention(hidden, encoder_output)
 
         # x shape after passing through embedding == (batch_size, 1, embedding_dim)
         x = self.embedding(x)
