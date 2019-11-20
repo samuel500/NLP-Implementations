@@ -5,7 +5,9 @@ import matplotlib.ticker as ticker
 
 import numpy as np
 
+from models import *
 
+from data_utils import *
 
 def evaluate(sentence, encoder, decoder):
     attention_plot = np.zeros((max_length_targ, max_length_inp))
@@ -73,10 +75,53 @@ def translate(sentence, encoder, decoder):
 
 if __name__=='__main__':
 
-    
+
+    from main import vocab_inp_size, vocab_tar_size, embedding_dim, units, BATCH_SIZE, max_length_targ, max_length_inp, inp_lang, targ_lang,\
+            input_tensor_train, input_tensor_val, target_tensor_train, target_tensor_val, BUFFER_SIZE
+
+
+    dataset = tf.data.Dataset.from_tensor_slices((input_tensor_train, target_tensor_train)).shuffle(BUFFER_SIZE)
+    dataset = dataset.batch(BATCH_SIZE, drop_remainder=True)
+
+    example_input_batch, example_target_batch = next(iter(dataset))
+    example_input_batch.shape, example_target_batch.shape
+
+
+    encoder = Encoder(vocab_inp_size, embedding_dim, units, BATCH_SIZE)
+
+    # sample input
+    sample_hidden = encoder.initialize_hidden_state()
+    sample_output, sample_hidden = encoder(example_input_batch, sample_hidden)
+    print ('Encoder output shape: (batch size, sequence length, units) {}'.format(sample_output.shape))
+    print ('Encoder Hidden state shape: (batch size, units) {}'.format(sample_hidden.shape))
+
+
+
+    attention_layer = AdditiveAttention(10)
+    attention_result, attention_weights = attention_layer(sample_hidden, sample_output)
+
+    print("Attention result shape: (batch size, units) {}".format(attention_result.shape))
+    print("Attention weights shape: (batch_size, sequence_length, 1) {}".format(attention_weights.shape))
+
+
+
+
+    decoder = Decoder(vocab_tar_size, embedding_dim, units, BATCH_SIZE)
+
+    sample_decoder_output, _, _ = decoder(tf.random.uniform((64, 1)), sample_hidden, sample_output)
+
+    print ('Decoder output shape: (batch_size, vocab size) {}'.format(sample_decoder_output.shape))
+
+    optimizer = tf.keras.optimizers.Adam()
+
+    loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
+
 
     checkpoint_dir = './training_checkpoints'
+    checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt")
+    checkpoint = tf.train.Checkpoint(optimizer=optimizer, encoder=encoder, decoder=decoder)
 
+    #translate(u'hace mucho frio aqui.', encoder, decoder)
 
     checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 

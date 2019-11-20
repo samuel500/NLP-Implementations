@@ -1,6 +1,5 @@
 import tensorflow as tf
 
-
 from tensorflow.keras.layers import Dense, Layer, GRU, Embedding, Bidirectional
 
 
@@ -12,7 +11,8 @@ class Encoder(tf.keras.Model):
         self.batch_size = batch_size
         self.enc_units = enc_units
         self.embedding = Embedding(vocab_size, embedding_dim)
-        self.rnn = Bidirectional(GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform'))
+        #self.rnn = Bidirectional(GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform'))
+        self.rnn = GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
 
     def call(self, x, hidden):
         x = self.embedding(x)
@@ -20,7 +20,9 @@ class Encoder(tf.keras.Model):
         return output, state
 
     def initialize_hidden_state(self):
+        #return [tf.zeros((self.batch_size, self.enc_units))]*2
         return tf.zeros((self.batch_size, self.enc_units))
+
 
 
 class AdditiveAttention(Layer): 

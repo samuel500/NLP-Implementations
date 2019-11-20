@@ -9,7 +9,6 @@ import io
 import time
 
 
-
 # Converts the unicode file to ascii
 def unicode_to_ascii(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s)
@@ -38,7 +37,7 @@ def preprocess_sentence(w):
 
 # 1. Remove the accents
 # 2. Clean the sentences
-# 3. Return word pairs in the format: [ENGLISH, SPANISH]
+# 3. Return word pairs in the format: [ENGLISH, SPANISH/FRENCH]
 def create_dataset(path, num_examples):
     lines = io.open(path, encoding='UTF-8').read().strip().split('\n')
     print('dataset size:', len(lines))
@@ -74,5 +73,5 @@ def load_dataset(path, num_examples=None):
 def convert(lang, tensor):
     for t in tensor:
         if t!=0:
-            print ("%d ----> %s" % (t, lang.index_word[t]))
+            print("%d ----> %s" % (t, lang.index_word[t]))
 
