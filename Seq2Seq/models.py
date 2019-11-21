@@ -2,7 +2,7 @@ import tensorflow as tf
 
 from tensorflow.keras.layers import Dense, Layer, GRU, Embedding, Bidirectional
 
-
+import numpy as np
 
 class Encoder(tf.keras.Model):
 
@@ -11,17 +11,20 @@ class Encoder(tf.keras.Model):
         self.batch_size = batch_size
         self.enc_units = enc_units
         self.embedding = Embedding(vocab_size, embedding_dim)
-        #self.rnn = Bidirectional(GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform'))
-        self.rnn = GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
+        self.rnn = Bidirectional(GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform'))
+        # self.rnn = GRU(self.enc_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
 
     def call(self, x, hidden):
         x = self.embedding(x)
-        output, state = self.rnn(x, initial_state=hidden)
-        return output, state
+        # out = self.rnn(x, initial_state=hidden)
+        # print(out)
+        output, state1, state2 = self.rnn(x, initial_state=hidden)
+
+        return output, [state1, state2]
 
     def initialize_hidden_state(self):
-        #return [tf.zeros((self.batch_size, self.enc_units))]*2
-        return tf.zeros((self.batch_size, self.enc_units))
+        return [tf.zeros((self.batch_size, self.enc_units))]*2
+        # return tf.zeros((self.batch_size, self.enc_units))
 
 
 
@@ -38,11 +41,13 @@ class AdditiveAttention(Layer):
         # hidden shape == (batch_size, hidden size)
         # hidden_with_time_axis shape == (batch_size, 1, hidden size)
         # we are doing this to perform addition to calculate the score
-        hidden_with_time_axis = tf.expand_dims(query, 1)
+        query = tf.reshape(query, (values.shape[0], 1, -1))
+        hidden_with_time_axis = query#tf.expand_dims(query, 1)
 
         # score shape == (batch_size, max_length, 1)
         # we get 1 at the last axis because we are applying score to self.V
         # the shape of the tensor before applying self.V is (batch_size, max_length, units)
+
         score = self.V(tf.tanh(self.W1(values) + self.W2(hidden_with_time_axis)))
 
         # attention_weights shape == (batch_size, max_length, 1)
@@ -65,7 +70,7 @@ class Decoder(tf.keras.Model):
         self.gru = GRU(self.dec_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
         self.fc = Dense(vocab_size)
 
-        self.attention = AdditiveAttention(self.dec_units)
+        self.attention = AdditiveAttention(64)
 
 
     def call(self, x, hidden, encoder_output):
@@ -73,8 +78,8 @@ class Decoder(tf.keras.Model):
         context_vector, attention_weights = self.attention(hidden, encoder_output)
 
         # x shape after passing through embedding == (batch_size, 1, embedding_dim)
-        x = self.embedding(x)
 
+        x = self.embedding(x)
         # x shape after concatenation == (batch_size, 1, embedding_dim + hidden_size)
         x = tf.concat([tf.expand_dims(context_vector, 1), x], axis=-1)
 

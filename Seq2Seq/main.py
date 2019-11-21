@@ -13,7 +13,7 @@ import matplotlib.ticker as ticker
 
 from data_utils import *
 from models import *
-#from eval_utils import translate
+# from eval_utils import translate
 
 
 def loss_function(real, pred):
@@ -37,6 +37,7 @@ def train_step(input_batch, target, encoder_hidden):
         decoder_hidden = encoder_hidden
 
         decoder_input = tf.expand_dims([targ_lang.word_index['<start>']] * BATCH_SIZE, 1)
+        # print('dec_in', decoder_input.shape)
 
         # Teacher forcing - feeding the target as the next input
         for t in range(1, target.shape[1]):
@@ -58,7 +59,8 @@ def train_step(input_batch, target, encoder_hidden):
 
     return batch_loss
 
-def evaluate(sentence):
+
+def evaluate(sentence, encoder, decoder):
     attention_plot = np.zeros((max_length_targ, max_length_inp))
 
     sentence = preprocess_sentence(sentence)
@@ -69,7 +71,7 @@ def evaluate(sentence):
 
     result = ''
 
-    hidden = [tf.zeros((1, units))]
+    hidden = [tf.zeros((1, units))]*2
     enc_out, enc_hidden = encoder(inputs, hidden)
 
     dec_hidden = enc_hidden
@@ -111,8 +113,8 @@ def plot_attention(attention, sentence, predicted_sentence):
     plt.show()
 
 
-def translate(sentence):
-    result, sentence, attention_plot = evaluate(sentence)
+def translate(sentence, encoder, decoder):
+    result, sentence, attention_plot = evaluate(sentence, encoder, decoder)
 
     print('Input: %s' % (sentence))
     print('Predicted translation: {}'.format(result))
@@ -122,10 +124,9 @@ def translate(sentence):
 
 
 
+path_to_zip = tf.keras.utils.get_file('fra-eng.zip', origin='http://storage.googleapis.com/download.tensorflow.org/data/fra-eng.zip', extract=True)
 
-path_to_zip = tf.keras.utils.get_file('spa-eng.zip', origin='http://storage.googleapis.com/download.tensorflow.org/data/spa-eng.zip', extract=True)
-
-path_to_file = os.path.dirname(path_to_zip)+"/spa-eng/spa.txt"
+path_to_file = os.path.dirname(path_to_zip)+"/fra-eng/fra.txt"
 
 
 en, sp = create_dataset(path_to_file, None)
@@ -153,8 +154,8 @@ print(len(input_tensor_train), len(target_tensor_train), len(input_tensor_val), 
 BUFFER_SIZE = len(input_tensor_train)
 BATCH_SIZE = 64
 steps_per_epoch = len(input_tensor_train)//BATCH_SIZE
-embedding_dim = 256
-units = 512
+embedding_dim = 128
+units = 256
 vocab_inp_size = len(inp_lang.word_index)+1
 vocab_tar_size = len(targ_lang.word_index)+1
 
@@ -171,30 +172,27 @@ if __name__=="__main__":
 
     encoder = Encoder(vocab_inp_size, embedding_dim, units, BATCH_SIZE)
 
-    # sample input
-    sample_hidden = encoder.initialize_hidden_state()
-    sample_output, sample_hidden = encoder(example_input_batch, sample_hidden)
-    print ('Encoder output shape: (batch size, sequence length, units) {}'.format(sample_output.shape))
-    print ('Encoder Hidden state shape: (batch size, units) {}'.format(sample_hidden.shape))
+    # # sample input
+    # sample_hidden = encoder.initialize_hidden_state()
+    # sample_output, sample_hidden = encoder(example_input_batch, sample_hidden)
+    # print ('Encoder output shape: (batch size, sequence length, units) {}'.format(sample_output.shape))
+    # # print ('Encoder Hidden state shape: (batch size, units) {}'.format(sample_hidden.shape))
 
 
+    # attention_layer = AdditiveAttention(10)
+    # attention_result, attention_weights = attention_layer(sample_hidden, sample_output)
 
-    attention_layer = AdditiveAttention(10)
-    attention_result, attention_weights = attention_layer(sample_hidden, sample_output)
-
-    print("Attention result shape: (batch size, units) {}".format(attention_result.shape))
-    print("Attention weights shape: (batch_size, sequence_length, 1) {}".format(attention_weights.shape))
-
+    # print("Attention result shape: (batch size, units) {}".format(attention_result.shape))
+    # print("Attention weights shape: (batch_size, sequence_length, 1) {}".format(attention_weights.shape))
 
 
+    decoder = Decoder(vocab_tar_size, embedding_dim, 2*units, BATCH_SIZE)
 
-    decoder = Decoder(vocab_tar_size, embedding_dim, units, BATCH_SIZE)
+    # sample_decoder_output, _, _ = decoder(tf.random.uniform((BATCH_SIZE, 1)), sample_hidden, sample_output)
 
-    sample_decoder_output, _, _ = decoder(tf.random.uniform((64, 1)), sample_hidden, sample_output)
+    # print ('Decoder output shape: (batch_size, vocab size) {}'.format(sample_decoder_output.shape))
 
-    print ('Decoder output shape: (batch_size, vocab size) {}'.format(sample_decoder_output.shape))
-
-    optimizer = tf.keras.optimizers.Adam()
+    optimizer = tf.keras.optimizers.Adam(3e-4)
 
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
 
@@ -204,7 +202,7 @@ if __name__=="__main__":
     checkpoint = tf.train.Checkpoint(optimizer=optimizer, encoder=encoder, decoder=decoder)
 
 
-    EPOCHS = 1
+    EPOCHS = 10
 
     for epoch in range(EPOCHS):
         start = time.time()
@@ -215,7 +213,6 @@ if __name__=="__main__":
         for (batch, (input_batch, target)) in enumerate(dataset.take(steps_per_epoch)):
             batch_loss = train_step(input_batch, target, encoder_hidden)
             total_loss += batch_loss
-            break
             if batch % 100 == 0:
                 print('Epoch {} Batch {} Loss {:.4f}'.format(epoch + 1, batch, batch_loss.numpy()))
         # saving (checkpoint) the model every 2 epochs
@@ -229,11 +226,11 @@ if __name__=="__main__":
 print(tf.train.latest_checkpoint(checkpoint_dir))
 stat = checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 print('stat', stat)
-translate(u'hace mucho frio aqui.')
+translate(u'il fait tres froid ici', encoder, decoder)
 
-translate(u'esta es mi vida.')
+translate(u'ceci est ma vie.', encoder, decoder)
 
-translate(u'¿todavia estan en casa?')
+translate(u'es tu a la maison?', encoder, decoder)
 
 
-translate(u'trata de averiguarlo.')
+translate(u'je suis bien content.', encoder, decoder)
