@@ -132,7 +132,7 @@ path_to_file = os.path.dirname(path_to_zip)+"/fra-eng/fra.txt"
 en, sp = create_dataset(path_to_file, None)
 
 
-num_examples = 100000
+num_examples = 30000
 input_tensor, target_tensor, inp_lang, targ_lang = load_dataset(path_to_file, num_examples)
 
 # Calculate max_length of the target tensors
@@ -152,10 +152,10 @@ print(len(input_tensor_train), len(target_tensor_train), len(input_tensor_val), 
 # convert(targ_lang, target_tensor_train[0])
 
 BUFFER_SIZE = len(input_tensor_train)
-BATCH_SIZE = 64
+BATCH_SIZE = 32
 steps_per_epoch = len(input_tensor_train)//BATCH_SIZE
 embedding_dim = 128
-units = 256
+units = 128
 vocab_inp_size = len(inp_lang.word_index)+1
 vocab_tar_size = len(targ_lang.word_index)+1
 
@@ -173,8 +173,8 @@ if __name__=="__main__":
     encoder = Encoder(vocab_inp_size, embedding_dim, units, BATCH_SIZE)
 
     # # sample input
-    # sample_hidden = encoder.initialize_hidden_state()
-    # sample_output, sample_hidden = encoder(example_input_batch, sample_hidden)
+    sample_hidden = encoder.initialize_hidden_state()
+    sample_output, sample_hidden = encoder(example_input_batch, sample_hidden)
     # print ('Encoder output shape: (batch size, sequence length, units) {}'.format(sample_output.shape))
     # # print ('Encoder Hidden state shape: (batch size, units) {}'.format(sample_hidden.shape))
 
@@ -188,11 +188,11 @@ if __name__=="__main__":
 
     decoder = Decoder(vocab_tar_size, embedding_dim, 2*units, BATCH_SIZE)
 
-    # sample_decoder_output, _, _ = decoder(tf.random.uniform((BATCH_SIZE, 1)), sample_hidden, sample_output)
+    sample_decoder_output, _, _ = decoder(tf.random.uniform((BATCH_SIZE, 1)), sample_hidden, sample_output)
 
-    # print ('Decoder output shape: (batch_size, vocab size) {}'.format(sample_decoder_output.shape))
+    print ('Decoder output shape: (batch_size, vocab size) {}'.format(sample_decoder_output.shape))
 
-    optimizer = tf.keras.optimizers.Adam(3e-4)
+    optimizer = tf.keras.optimizers.Adam()
 
     loss_object = tf.keras.losses.SparseCategoricalCrossentropy(from_logits=True, reduction='none')
 
@@ -223,14 +223,14 @@ if __name__=="__main__":
                                         total_loss / steps_per_epoch))
         print('Time taken for 1 epoch {} sec\n'.format(time.time() - start))
 
-print(tf.train.latest_checkpoint(checkpoint_dir))
-stat = checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
-print('stat', stat)
-translate(u'il fait tres froid ici', encoder, decoder)
-
-translate(u'ceci est ma vie.', encoder, decoder)
-
-translate(u'es tu a la maison?', encoder, decoder)
+    print(tf.train.latest_checkpoint(checkpoint_dir))
+    stat = checkpoint.restore(tf.train.latest_checkpoint(checkpoint_dir))
 
 
-translate(u'je suis bien content.', encoder, decoder)
+    translate(u'il fait tres froid ici', encoder, decoder)
+
+    translate(u'ceci est ma vie.', encoder, decoder)
+
+    translate(u'es tu a la maison?', encoder, decoder)
+
+    translate(u'je suis bien content.', encoder, decoder)

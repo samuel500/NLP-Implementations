@@ -70,7 +70,7 @@ class Decoder(tf.keras.Model):
         self.gru = GRU(self.dec_units, return_sequences=True, return_state=True, recurrent_initializer='glorot_uniform')
         self.fc = Dense(vocab_size)
 
-        self.attention = AdditiveAttention(64)
+        self.attention = AdditiveAttention(256)
 
 
     def call(self, x, hidden, encoder_output):
