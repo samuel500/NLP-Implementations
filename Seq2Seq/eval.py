@@ -34,33 +34,39 @@ def evaluate(sentence, encoder, decoder, beams=4, max_tree_width=12):
     dec_input = tf.expand_dims([targ_lang.word_index['<start>']], 0)
 
 
-    tree = [{'dec_input': dec_input, 'dec_hidden:': dec_hidden, 'ids': [], 'ps': [], 'attention_weights': []}]
+    tree = [{'dec_input': dec_input, 'dec_hidden': dec_hidden, 'ids': [], 'ps': [], 'attention_weights': []}]
 
 
     def beam_decode():
         pass
 
 
+    end_hypotheses = []
 
     for t in range(max_length_targ):
+
+        if len(end_hypotheses) == max_tree_width:
+            break
+
         new_tree = []
         for branch in tree:
+            # print(branch)
             predictions, dec_hidden, attention_weights = decoder(branch['dec_input'], branch['dec_hidden'], enc_out)
 
 
-            top_k = tf.math.top_k(predictions[0], k=beam_search_width)
+            top_k = tf.math.top_k(predictions[0], k=beams)
             
             attention_weights = tf.reshape(attention_weights, (-1, )).numpy()
             # attention_plot[t] = attention_weights.numpy()
 
-            for i in range(beam_search_width):
+            for i in range(beams):
 
                 predicted_id = top_k[1][i]
 
                 new_branch = {
-                    'dec_input': tf.expand_dims([predicted_id], 0)
+                    'dec_input': tf.expand_dims([predicted_id], 0),
                     'dec_hidden': dec_hidden, 
-                    'ids': branch['ids'] + [predicted_id],
+                    'ids': branch['ids'] + [predicted_id.numpy()],
                     'ps': branch['ps'] + [tf.nn.softmax(predictions[0])[predicted_id].numpy()],
                     'attention_weights': branch['attention_weights'] + [attention_weights],
                 }
@@ -75,17 +81,30 @@ def evaluate(sentence, encoder, decoder, beams=4, max_tree_width=12):
             # print(top_k)
             # print(tf.nn.softmax(predictions[0])[top_k[1].numpy()[1]])
             # print(targ_lang.index_word[top_k[1].numpy()[1]])
+        new_tree.sort(key= lambda i: np.prod(i['ps']), reverse=True)
+        new_tree = new_tree[:max_tree_width]
 
-        new_tree.sort()
-        result += targ_lang.index_word[predicted_id] + ' '
+        ids_to_del = []
+        for i, branch in enumerate(new_tree):
+            if targ_lang.index_word[branch['ids'][-1]] == '<end>':
+                end_hypotheses.append(branch)
+                ids_to_del.append(i)
 
-        if targ_lang.index_word[predicted_id] == '<end>':
-            return result, sentence, attention_plot
-
+                if len(end_hypotheses) == max_tree_width:
+                    break
+        for i in sorted(ids_to_del, reverse=True): del new_tree[i]
 
 
         tree = new_tree
 
+    for hypothesis in end_hypotheses:
+        res = ''
+        for i in hypothesis['ids']:
+            res += targ_lang.index_word[i] + " "
+
+        print(res)
+
+    raise
     return result, sentence, attention_plot
 
 
