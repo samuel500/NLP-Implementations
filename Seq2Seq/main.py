@@ -129,8 +129,6 @@ path_to_zip = tf.keras.utils.get_file('fra-eng.zip', origin='http://storage.goog
 path_to_file = os.path.dirname(path_to_zip)+"/fra-eng/fra.txt"
 
 
-en, sp = create_dataset(path_to_file, None)
-
 
 num_examples = 30000
 input_tensor, target_tensor, inp_lang, targ_lang = load_dataset(path_to_file, num_examples)

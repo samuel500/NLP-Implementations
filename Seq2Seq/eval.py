@@ -15,7 +15,7 @@ from data_utils import *
 from models import *
 
 
-def evaluate(sentence, encoder, decoder):
+def evaluate(sentence, encoder, decoder, beams=4, max_tree_width=12):
     attention_plot = np.zeros((max_length_targ, max_length_inp))
 
     sentence = preprocess_sentence(sentence)
@@ -27,27 +27,64 @@ def evaluate(sentence, encoder, decoder):
     result = ''
 
     hidden = [tf.zeros((1, units))]*2
+
     enc_out, enc_hidden = encoder(inputs, hidden)
 
     dec_hidden = enc_hidden
     dec_input = tf.expand_dims([targ_lang.word_index['<start>']], 0)
 
+
+    tree = [{'dec_input': dec_input, 'dec_hidden:': dec_hidden, 'ids': [], 'ps': [], 'attention_weights': []}]
+
+
+    def beam_decode():
+        pass
+
+
+
     for t in range(max_length_targ):
-        predictions, dec_hidden, attention_weights = decoder(dec_input, dec_hidden, enc_out)
+        new_tree = []
+        for branch in tree:
+            predictions, dec_hidden, attention_weights = decoder(branch['dec_input'], branch['dec_hidden'], enc_out)
 
-        # storing the attention weights to plot later on
-        attention_weights = tf.reshape(attention_weights, (-1, ))
-        attention_plot[t] = attention_weights.numpy()
 
-        predicted_id = tf.argmax(predictions[0]).numpy()
+            top_k = tf.math.top_k(predictions[0], k=beam_search_width)
+            
+            attention_weights = tf.reshape(attention_weights, (-1, )).numpy()
+            # attention_plot[t] = attention_weights.numpy()
 
+            for i in range(beam_search_width):
+
+                predicted_id = top_k[1][i]
+
+                new_branch = {
+                    'dec_input': tf.expand_dims([predicted_id], 0)
+                    'dec_hidden': dec_hidden, 
+                    'ids': branch['ids'] + [predicted_id],
+                    'ps': branch['ps'] + [tf.nn.softmax(predictions[0])[predicted_id].numpy()],
+                    'attention_weights': branch['attention_weights'] + [attention_weights],
+                }
+
+                new_tree.append(new_branch)
+
+
+
+            # predicted_id = tf.argmax(predictions[0]).numpy()
+
+            # print(tf.nn.softmax(predictions[0])[predicted_id])
+            # print(top_k)
+            # print(tf.nn.softmax(predictions[0])[top_k[1].numpy()[1]])
+            # print(targ_lang.index_word[top_k[1].numpy()[1]])
+
+        new_tree.sort()
         result += targ_lang.index_word[predicted_id] + ' '
 
         if targ_lang.index_word[predicted_id] == '<end>':
             return result, sentence, attention_plot
 
-        # the predicted ID is fed back into the model
-        dec_input = tf.expand_dims([predicted_id], 0)
+
+
+        tree = new_tree
 
     return result, sentence, attention_plot
 
@@ -82,8 +119,6 @@ path_to_zip = tf.keras.utils.get_file('fra-eng.zip', origin='http://storage.goog
 path_to_file = os.path.dirname(path_to_zip)+"/fra-eng/fra.txt"
 
 
-en, sp = create_dataset(path_to_file, None)
-
 
 num_examples = 150000
 input_tensor, target_tensor, inp_lang, targ_lang = load_dataset(path_to_file, num_examples)
@@ -97,6 +132,7 @@ max_length_targ, max_length_inp = max_length(target_tensor), max_length(input_te
 BATCH_SIZE = 64
 embedding_dim = 256
 units = 512
+
 vocab_inp_size = len(inp_lang.word_index)+1
 vocab_tar_size = len(targ_lang.word_index)+1
 
