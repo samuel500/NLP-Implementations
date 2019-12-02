@@ -15,7 +15,7 @@ from data_utils import *
 from models import *
 
 
-def evaluate(sentence, encoder, decoder, beams=4, max_tree_width=12):
+def evaluate(sentence, encoder, decoder, beams=6, max_tree_width=20):
     attention_plot = np.zeros((max_length_targ, max_length_inp))
 
     sentence = preprocess_sentence(sentence)
@@ -97,14 +97,30 @@ def evaluate(sentence, encoder, decoder, beams=4, max_tree_width=12):
 
         tree = new_tree
 
+    max_score = -999999
+        
+    end_hypotheses.sort(key= lambda i: np.prod(i['ps']), reverse=True)
+
     for hypothesis in end_hypotheses:
         res = ''
         for i in hypothesis['ids']:
             res += targ_lang.index_word[i] + " "
-
+        
+        print("P:", np.prod(hypothesis['ps']))
         print(res)
 
-    raise
+        alpha = 0.5
+        score = np.log(np.prod(hypothesis['ps']))/((5+len(hypothesis['ps']))/6)**alpha # https://arxiv.org/pdf/1609.08144.pdf  eq (14)
+        if score >= max_score:
+            max_score = score
+            best_hypothesis = hypothesis
+            result = res
+
+    for i, att_w in enumerate(best_hypothesis['attention_weights']):
+        attention_plot[i] = att_w
+
+
+
     return result, sentence, attention_plot
 
 
