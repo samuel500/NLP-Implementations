@@ -161,6 +161,9 @@ vocab_tar_size = len(targ_lang.word_index)+1
 
 
 if __name__=="__main__":
+    print(type(input_tensor_train))
+    print(len(input_tensor_train))
+    raise
     dataset = tf.data.Dataset.from_tensor_slices((input_tensor_train, target_tensor_train)).shuffle(BUFFER_SIZE)
     dataset = dataset.batch(BATCH_SIZE, drop_remainder=True)
 
@@ -209,6 +212,7 @@ if __name__=="__main__":
         total_loss = 0
 
         for (batch, (input_batch, target)) in enumerate(dataset.take(steps_per_epoch)):
+            print(input_batch)
             batch_loss = train_step(input_batch, target, encoder_hidden)
             total_loss += batch_loss
             if batch % 100 == 0:
