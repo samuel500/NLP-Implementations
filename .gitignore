@@ -1,4 +1,5 @@
 __pycache__/
 training_checkpoints/
+checkpoints/
 todo
 .ipynb_checkpoints
